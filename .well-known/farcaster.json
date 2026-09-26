@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjAsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgwOTA1NjY3OTFGNmZCNjU2MjJGNGYxMWI1YjdmRTM5YjIxOUU4OUY0In0",
+    "payload": "eyJkb21haW4iOiIzZXNpZ24uZ2l0aHViLmlvIn0",
+    "signature": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "frame": {
+    "version": "1",
+    "name": "The Warp Button",
+    "iconUrl": "https://3esign.github.io/warp/icon.png",
+    "homeUrl": "https://3esign.github.io/warp/",
+    "imageUrl": "https://3esign.github.io/warp/og-image.png",
+    "buttonTitle": "🔴 PRESS THE BUTTON",
+    "splashImageUrl": "https://3esign.github.io/warp/icon.png",
+    "splashBackgroundColor": "#07090e",
+    "webhookUrl": ""
+  }
+}

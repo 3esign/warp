@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>The Warp Button — Base Mini App</title>
+
+  <!-- Farcaster Mini App & Frame Metadata -->
+  <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"🔴 PRESS THE BUTTON","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/warp/icon.png","splashBackgroundColor":"#07080f"}}}' />
+  <meta name="fc:frame" content='{"version":"next","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Play The Warp Button","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/warp/icon.png","splashBackgroundColor":"#07080f"}}}' />
+  
+  <!-- OpenGraph / Social -->
+  <meta property="og:title" content="The Warp Button — Autonomous FOMO Pot on Base">
+  <meta property="og:description" content="Pay 0.0001 ETH to reset the clock. If timer hits zero, the last player takes 80% of the jackpot.">
+  <meta property="og:image" content="https://3esign.github.io/warp/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <style>
+    :root {
+      --bg: #07080f;
+      --card: #0f121d;
+      --border: #1e2436;
+      --accent: #ff2a5f;
+      --accent-glow: rgba(255, 42, 95, 0.4);
+      --cyan: #00f0ff;
+      --cyan-glow: rgba(0, 240, 255, 0.3);
+      --gold: #ffbe1a;
+      --gold-glow: rgba(255, 190, 26, 0.35);
+      --green: #10b981;
+      --text: #e2e8f0;
+      --text-dim: #718096;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 50% 20%, rgba(255, 42, 95, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 50% 80%, rgba(0, 240, 255, 0.05) 0%, transparent 60%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 100vh;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--cyan);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .pill.active {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: var(--green);
+    }
+
+    /* Pot Display Card */
+    .pot-card {
+      background: linear-gradient(180deg, #131726 0%, #0c0f1a 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .pot-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    }
+
+    .pot-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .pot-amount {
+      font-size: 38px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 20px var(--gold-glow);
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .pot-symbol {
+      font-size: 18px;
+      color: var(--gold);
+      font-weight: 700;
+    }
+
+    .pot-fiat {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Timer Area */
+    .timer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 4px 0;
+    }
+
+    .timer-box {
+      background: #000;
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+      transition: all 0.3s;
+    }
+
+    .timer-box.sudden-death {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 20px var(--accent-glow), 0 0 25px var(--accent-glow);
+      animation: alertPulse 1s infinite alternate;
+    }
+
+    .timer-digits {
+      font-size: 34px;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 2px;
+    }
+
+    .timer-box.sudden-death .timer-digits {
+      color: var(--accent);
+      text-shadow: 0 0 12px var(--accent);
+    }
+
+    .timer-status {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--cyan);
+      margin-top: 6px;
+      font-weight: 700;
+    }
+
+    .timer-status.danger {
+      color: var(--accent);
+      font-weight: 900;
+    }
+
+    /* Giant Arcade Button Area */
+    .button-stage {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 15px 0 10px 0;
+      position: relative;
+    }
+
+    .arcade-base {
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #2a3148 0%, #0d101a 75%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 
+        0 14px 28px rgba(0,0,0,0.6),
+        0 0 0 8px #131726,
+        0 0 35px rgba(255, 42, 95, 0.2);
+      position: relative;
+      transition: transform 0.1s ease;
+    }
+
+    .button-ring {
+      width: 175px;
+      height: 175px;
+      border-radius: 50%;
+      background: #0a0c14;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: inset 0 6px 12px rgba(0,0,0,0.9);
+    }
+
+    .warp-btn {
+      width: 155px;
+      height: 155px;
+      border-radius: 50%;
+      border: none;
+      background: radial-gradient(circle at 35% 30%, #ff4b7a 0%, #d41144 55%, #850022 100%);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 
+        0 10px 18px rgba(0, 0, 0, 0.7),
+        inset 0 4px 10px rgba(255, 255, 255, 0.4),
+        inset 0 -8px 12px rgba(0, 0, 0, 0.6);
+      transform: translateY(-4px);
+      transition: all 0.08s ease-in-out;
+      outline: none;
+    }
+
+    .warp-btn:active, .warp-btn.pressed {
+      transform: translateY(4px);
+      box-shadow: 
+        0 2px 6px rgba(0, 0, 0, 0.8),
+        inset 0 2px 6px rgba(255, 255, 255, 0.2),
+        inset 0 -3px 8px rgba(0, 0, 0, 0.8);
+      filter: brightness(0.92);
+    }
+
+    .btn-text {
+      font-size: 19px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 1px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+
+    .btn-sub {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.8);
+      margin-top: 3px;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+
+    /* Current King Banner */
+    .king-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .king-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .crown-icon {
+      font-size: 20px;
+    }
+
+    .king-title {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .king-address {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--cyan);
+      font-family: monospace;
+    }
+
+    .clicks-badge {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    /* Actions Grid */
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn-secondary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: #161b2b;
+      border-color: #2b334c;
+    }
+
+    .btn-share {
+      border-color: rgba(0, 240, 255, 0.3);
+      color: var(--cyan);
+    }
+
+    /* Live Feed / Ticker */
+    .feed-card {
+      background: #0a0c14;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .feed-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .feed-item {
+      font-size: 11px;
+      color: var(--text);
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dashed rgba(255,255,255,0.05);
+      padding-bottom: 4px;
+    }
+
+    .feed-player {
+      color: var(--cyan);
+      font-family: monospace;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(4px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 380px;
+      width: 100%;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .modal-body {
+      font-size: 12px;
+      color: #a0aec0;
+      line-height: 1.6;
+    }
+
+    .modal-body strong {
+      color: #fff;
+    }
+
+    .modal-close {
+      background: var(--border);
+      border: none;
+      padding: 10px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+
+    @keyframes alertPulse {
+      0% { box-shadow: inset 0 0 10px var(--accent-glow), 0 0 10px var(--accent-glow); }
+      100% { box-shadow: inset 0 0 25px var(--accent-glow), 0 0 35px var(--accent-glow); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <span>WARP BUTTON</span>
+      </div>
+      <div class="top-actions">
+        <button class="pill" id="btnAudioToggle">🔊 SFX ON</button>
+        <button class="pill" id="btnRules">❓ RULES</button>
+        <div class="pill active" id="badgeNetwork">BASE</div>
+      </div>
+    </div>
+
+    <!-- Pot Card -->
+    <div class="pot-card">
+      <div class="pot-label">Jackpot Pot (Round <span id="roundNumber">1</span>)</div>
+      <div class="pot-amount">
+        <span id="potValue">0.0000</span>
+        <span class="pot-symbol">ETH</span>
+      </div>
+      <div class="pot-fiat" id="potUsd">≈ $0.00 USD</div>
+    </div>
+
+    <!-- Timer Area -->
+    <div class="timer-container">
+      <div class="timer-box" id="timerBox">
+        <div class="timer-digits" id="timerDigits">10:00</div>
+      </div>
+      <div class="timer-status" id="timerStatus">⚡ ACTIVE COUNTDOWN</div>
+    </div>
+
+    <!-- Giant Arcade Button -->
+    <div class="button-stage">
+      <div class="arcade-base">
+        <div class="button-ring">
+          <button class="warp-btn" id="mainButton">
+            <span class="btn-text">PRESS</span>
+            <span class="btn-sub">0.0001 ETH</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- King of the Hill Card -->
+    <div class="king-card">
+      <div class="king-info">
+        <div class="crown-icon">👑</div>
+        <div>
+          <div class="king-title">Current Leader / Last Press</div>
+          <div class="king-address" id="kingAddress">None (Be First!)</div>
+        </div>
+      </div>
+      <div class="clicks-badge">
+        <span id="clickCounter">0</span> Clicks
+      </div>
+    </div>
+
+    <!-- Secondary Actions -->
+    <div class="actions-grid">
+      <button class="btn-secondary btn-share" id="btnShareCast">
+        🚀 Share Pot to Feed
+      </button>
+      <button class="btn-secondary" id="btnConnectWallet">
+        👛 <span id="walletBtnText">Connect Wallet</span>
+      </button>
+    </div>
+
+    <!-- Live Event Feed -->
+    <div class="feed-card">
+      <div class="feed-title">
+        <span>Live Round Activity</span>
+        <span id="feedLiveStatus">● Synced</span>
+      </div>
+      <div id="feedList">
+        <div class="feed-item">
+          <span>System</span>
+          <span class="feed-player">Round 1 initialized</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules Modal -->
+  <div class="modal-overlay" id="rulesModal">
+    <div class="modal-content">
+      <div class="modal-title">🎮 How The Warp Button Works</div>
+      <div class="modal-body">
+        <p><strong>1. The Objective:</strong> Be the last person to press the button before the countdown clock hits 00:00.</p><br>
+        <p><strong>2. Cost & Timing:</strong> Each press costs <strong>0.0001 ETH</strong> (~$0.30 on Base) and adds <strong>+30 seconds</strong> to the clock (capped at 30 mins).</p><br>
+        <p><strong>3. Sudden Death:</strong> When remaining time is under <strong>60 seconds</strong>, every click resets the timer to exactly 60s for maximum tension.</p><br>
+        <p><strong>4. Pot Distribution:</strong></p>
+        <ul style="padding-left: 18px; margin-top: 4px;">
+          <li>🏆 <strong>80%</strong> sent directly to the last clicker (Winner).</li>
+          <li>🌱 <strong>10%</strong> seeds the next round pot automatically.</li>
+          <li>🔥 <strong>10%</strong> in-game fee (split 50% to creator wallet, 50% to pot).</li>
+        </ul><br>
+        <p><strong>5. 50/50 Trading Fee Engine:</strong> External DEX / token trading fees (Clanker/Flaunch) automatically split: <strong>50%</strong> directly to creator wallet and <strong>50%</strong> straight into the jackpot pot!</p>
+      </div>
+      <button class="modal-close" id="btnCloseRules">Got it</button>
+    </div>
+  </div>
+
+  <script>
+    // --- Configuration ---
+    const BASE_CHAIN_ID = '0x2105'; // 8453 in hex
+    const BASE_RPC_URL = 'https://mainnet.base.org';
+    const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000'; // Updated upon deployment
+    const TICKET_PRICE_WEI = '0x5af3107a4000'; // 0.0001 ETH (10^14 wei)
+    const ETH_USD_PRICE = 3000;
+
+    // --- State Variables ---
+    let userAddress = null;
+    let sfxEnabled = true;
+    let secondsLeft = 600;
+    let currentPotWei = 0n;
+    let currentRound = 1;
+    let currentKing = 'None';
+    let totalClicks = 0;
+    let timerInterval = null;
+
+    // --- Audio Synthesizer (Web Audio API, Zero Dependencies) ---
+    const AudioEngine = {
+      ctx: null,
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+      },
+      beep(freq, duration, type = 'sine') {
+        if (!sfxEnabled) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
+      },
+      clickThump() {
+        if (!sfxEnabled) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.12);
+        } catch(e) {}
+      },
+      tick() {
+        this.beep(880, 0.04, 'square');
+      },
+      fanfare() {
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+          setTimeout(() => this.beep(freq, 0.25, 'triangle'), i * 120);
+        });
+      }
+    };
+
+    // --- Farcaster Mini App Handshake ---
+    function initFarcaster() {
+      // Signal ready to parent iframe
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'fc:frame:ready' }, '*');
+      }
+    }
+
+    // --- Provider Detection (Warpcast In-App Wallet or Injected Web3) ---
+    function getEthereumProvider() {
+      // 1. Warpcast embedded miniapp provider
+      if (window.farcaster?.wallet?.ethProvider) {
+        return window.farcaster.wallet.ethProvider;
+      }
+      // 2. Standard EIP-1193 injected provider (MetaMask, Rabby, Coinbase Wallet)
+      if (window.ethereum) {
+        return window.ethereum;
+      }
+      return null;
+    }
+
+    // --- UI Update Helpers ---
+    function formatAddress(addr) {
+      if (!addr || addr === 'None' || addr === '0x0000000000000000000000000000000000000000') return 'None (Be First!)';
+      return addr.slice(0, 6) + '...' + addr.slice(-4);
+    }
+
+    function formatTime(sec) {
+      if (sec <= 0) return '00:00';
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function updateUi() {
+      const ethAmount = Number(currentPotWei) / 1e18;
+      document.getElementById('potValue').textContent = ethAmount.toFixed(4);
+      document.getElementById('potUsd').textContent = `≈ $${(ethAmount * ETH_USD_PRICE).toFixed(2)} USD`;
+      document.getElementById('roundNumber').textContent = currentRound;
+      document.getElementById('kingAddress').textContent = formatAddress(currentKing);
+      document.getElementById('clickCounter').textContent = totalClicks;
+
+      const timerBox = document.getElementById('timerBox');
+      const timerDigits = document.getElementById('timerDigits');
+      const timerStatus = document.getElementById('timerStatus');
+
+      timerDigits.textContent = formatTime(secondsLeft);
+
+      if (secondsLeft <= 0) {
+        timerBox.classList.remove('sudden-death');
+        timerStatus.className = 'timer-status danger';
+        timerStatus.textContent = '🏆 ROUND COMPLETED — AWAITING SETTLEMENT';
+      } else if (secondsLeft <= 60) {
+        timerBox.classList.add('sudden-death');
+        timerStatus.className = 'timer-status danger';
+        timerStatus.textContent = '⚠️ SUDDEN DEATH MODE (EVERY CLICK = 60S)';
+      } else {
+        timerBox.classList.remove('sudden-death');
+        timerStatus.className = 'timer-status';
+        timerStatus.textContent = '⚡ ACTIVE COUNTDOWN';
+      }
+    }
+
+    function addFeedItem(player, note) {
+      const list = document.getElementById('feedList');
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      item.innerHTML = `<span>${note}</span><span class="feed-player">${formatAddress(player)}</span>`;
+      list.insertBefore(item, list.firstChild);
+      if (list.children.length > 8) list.removeChild(list.lastChild);
+    }
+
+    // --- Timer Countdown Tick ---
+    function startLocalTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (secondsLeft > 0) {
+          secondsLeft--;
+          if (secondsLeft <= 10 && secondsLeft > 0) {
+            AudioEngine.tick();
+          }
+          updateUi();
+        }
+      }, 1000);
+    }
+
+    // --- On-Chain Fetch via Base RPC (Zero Dependency) ---
+    async function syncGameState() {
+      if (CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000') {
+        // Mock demo mode until live CA is plugged in
+        return;
+      }
+
+      try {
+        // getGameState() function selector: 0xb7d0628b
+        const res = await fetch(BASE_RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_call',
+            params: [{ to: CONTRACT_ADDRESS, data: '0xb7d0628b' }, 'latest']
+          })
+        });
+
+        const data = await res.json();
+        if (data.result && data.result.length >= 130) {
+          // Decode ABI encoded tuple
+          const hex = data.result.slice(2);
+          const rId = BigInt('0x' + hex.slice(0, 64));
+          const pot = BigInt('0x' + hex.slice(64, 128));
+          const endTime = BigInt('0x' + hex.slice(256, 320));
+          const lastPlr = '0x' + hex.slice(344, 384);
+          const clicks = BigInt('0x' + hex.slice(384, 448));
+          const expired = BigInt('0x' + hex.slice(448, 512)) !== 0n;
+          const remSec = BigInt('0x' + hex.slice(512, 576));
+
+          currentRound = Number(rId);
+          currentPotWei = pot;
+          currentKing = lastPlr;
+          totalClicks = Number(clicks);
+          secondsLeft = Number(remSec);
+
+          document.getElementById('feedLiveStatus').textContent = '● Synced';
+          updateUi();
+        }
+      } catch (err) {
+        console.warn('RPC Sync error:', err);
+      }
+    }
+
+    // --- Button Press Action ---
+    async function handlePress() {
+      AudioEngine.clickThump();
+      if (navigator.vibrate) navigator.vibrate([30, 20, 40]);
+
+      const btn = document.getElementById('mainButton');
+      btn.classList.add('pressed');
+      setTimeout(() => btn.classList.remove('pressed'), 150);
+
+      const provider = getEthereumProvider();
+      if (!provider) {
+        // If opened outside Warpcast / no Web3, trigger demo mock click
+        simulateMockClick();
+        return;
+      }
+
+      try {
+        // Request account
+        const accounts = await provider.request({ method: 'eth_requestAccounts' });
+        userAddress = accounts[0];
+        document.getElementById('walletBtnText').textContent = formatAddress(userAddress);
+
+        // Check & Switch network to Base
+        try {
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: BASE_CHAIN_ID }]
+          });
+        } catch (switchErr) {
+          if (switchErr.code === 4902) {
+            await provider.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: BASE_CHAIN_ID,
+                chainName: 'Base Mainnet',
+                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                rpcUrls: [BASE_RPC_URL],
+                blockExplorerUrls: ['https://basescan.org']
+              }]
+            });
+          }
+        }
+
+        if (CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000') {
+          simulateMockClick();
+          return;
+        }
+
+        // Send transaction: pressButton() selector is 0xc8b5da66
+        const txHash = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: userAddress,
+            to: CONTRACT_ADDRESS,
+            value: TICKET_PRICE_WEI,
+            data: '0xc8b5da66'
+          }]
+        });
+
+        addFeedItem(userAddress, 'Pressed the button!');
+        syncGameState();
+      } catch (err) {
+        console.error('Transaction rejected/failed:', err);
+      }
+    }
+
+    function simulateMockClick() {
+      currentPotWei += 80000000000000n; // 0.00008 ETH to pot
+      totalClicks++;
+      currentKing = userAddress || '0x' + Math.random().toString(16).slice(2, 10) + '...' + Math.random().toString(16).slice(2, 6);
+      if (secondsLeft < 60) {
+        secondsLeft = 60;
+      } else {
+        secondsLeft = Math.min(secondsLeft + 30, 1800);
+      }
+      addFeedItem(currentKing, 'Pressed button (+30s)');
+      updateUi();
+    }
+
+    // --- Share to Warpcast / Farcaster Intent ---
+    function shareToWarpcast() {
+      const ethAmount = (Number(currentPotWei) / 1e18).toFixed(4);
+      const castText = `I just pressed The Warp Button on @base! Current jackpot is ${ethAmount} ETH ($${((Number(currentPotWei)/1e18)*ETH_USD_PRICE).toFixed(2)}). Can you claim the pot before time expires?`;
+      const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(castText)}&embeds[]=${encodeURIComponent(window.location.href)}`;
+      window.open(url, '_blank');
+    }
+
+    // --- Event Listeners ---
+    document.getElementById('mainButton').addEventListener('click', handlePress);
+    document.getElementById('btnShareCast').addEventListener('click', shareToWarpcast);
+
+    document.getElementById('btnConnectWallet').addEventListener('click', async () => {
+      const provider = getEthereumProvider();
+      if (!provider) {
+        alert('Please open inside Warpcast or install a Web3 wallet (MetaMask/Rabby).');
+        return;
+      }
+      try {
+        const accounts = await provider.request({ method: 'eth_requestAccounts' });
+        userAddress = accounts[0];
+        document.getElementById('walletBtnText').textContent = formatAddress(userAddress);
+      } catch(e) {}
+    });
+
+    document.getElementById('btnAudioToggle').addEventListener('click', () => {
+      sfxEnabled = !sfxEnabled;
+      document.getElementById('btnAudioToggle').textContent = sfxEnabled ? '🔊 SFX ON' : '🔈 SFX OFF';
+    });
+
+    document.getElementById('btnRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').style.display = 'flex';
+    });
+
+    document.getElementById('btnCloseRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').style.display = 'none';
+    });
+
+    // --- Initialization ---
+    window.addEventListener('DOMContentLoaded', () => {
+      initFarcaster();
+      updateUi();
+      startLocalTimer();
+      syncGameState();
+      setInterval(syncGameState, 2500);
+    });
+  </script>
+</body>
+</html>
