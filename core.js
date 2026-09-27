@@ -8,6 +8,10 @@
   const ZERO = '0x' + '0'.repeat(40);
   const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
   const ensure = (ok, message) => { if (!ok) throw new Error(message); };
+  // RPC nodes can briefly disagree while Base seals a preconfirmed block.
+  // Keep verification strict, but distinguish a retry from an invalid action.
+  const retryable = (ok, message) => { if (!ok) throw Object.assign(new Error(message), {code: 'RPC_UNSETTLED'}); };
+  const isRetryable = error => error?.code === 'RPC_UNSETTLED' || error?.code === 'RPC_UNAVAILABLE';
   const quantity = value => { ensure(typeof value === 'string' && /^0x[0-9a-f]+$/i.test(value), 'Invalid RPC quantity'); return BigInt(value); };
   const toHex = value => '0x' + BigInt(value).toString(16);
   const word = value => BigInt(value).toString(16).padStart(64, '0');
@@ -31,9 +35,9 @@
     ensure(config.chainId === '0x2105' && /^[0-9a-f]{64}$/i.test(config.runtimeSha256 || ''), 'Verified V2 deployment is not configured.');
   }
   function assertFreshBlock(block, now = Date.now(), maxAge = 90000) {
-    ensure(block && HASH.test(block.hash), 'Missing canonical block');
+    retryable(block && HASH.test(block.hash), 'Missing canonical block');
     const age = now - Number(quantity(block.timestamp)) * 1000;
-    ensure(age >= -30000 && age <= maxAge, 'RPC data is stale. Play is paused until fresh data returns.');
+    retryable(age >= -30000 && age <= maxAge, 'RPC data is stale. Play is paused until fresh data returns.');
     quantity(block.number);
   }
   async function ensureBase(provider) {
@@ -59,20 +63,28 @@
     ensure(await digest(code) === config.runtimeSha256, 'Game contract does not match the verified V2 release');
     const state = decodeState(data);
     const canonical = await rpc('eth_getBlockByNumber', [block.number, false]);
-    ensure(canonical && same(canonical.hash, block.hash), 'Block changed during read. Waiting for canonical state.');
+    retryable(canonical && same(canonical.hash, block.hash), 'Block changed during read. Waiting for canonical state.');
     return {...state, block, loadedAt: now};
   }
-  function validateReceipt(receipt, tx, block, pending, config) {
+  function validateReceiptIdentity(receipt, pending, config) {
     ensure(pending.version === 2 && typeof pending.nonce === 'string' && typeof pending.observedBlock === 'string' && HASH.test(pending.observedBlockHash || ''), 'Saved request lacks nonce and block binding. Keep it pending and inspect wallet history.');
     quantity(pending.nonce);
-    ensure(quantity(receipt.blockNumber) > quantity(pending.observedBlock), 'Receipt predates this wallet request. An earlier game action cannot clear it.');
     ensure(receipt && HASH.test(receipt.transactionHash) && same(receipt.transactionHash, pending.hash), 'Receipt is for a different transaction');
     ensure(same(receipt.to, config.contract) && same(receipt.from, pending.account), 'Receipt account or game does not match');
-    ensure(block && same(block.hash, receipt.blockHash) && quantity(block.number) === quantity(receipt.blockNumber), 'Receipt block is no longer canonical');
-    ensure(tx && same(tx.hash, pending.hash) && same(tx.from, pending.account) && same(tx.to, config.contract) && same(tx.blockHash, receipt.blockHash) && quantity(tx.blockNumber) === quantity(receipt.blockNumber), 'Transaction is not bound to this receipt');
+    if (receipt.blockNumber != null) ensure(quantity(receipt.blockNumber) > quantity(pending.observedBlock), 'Receipt predates this wallet request. An earlier game action cannot clear it.');
+  }
+  function validateTransactionIdentity(tx, pending, config) {
+    retryable(tx, 'Transaction details are not available yet.');
+    ensure(same(tx.hash, pending.hash) && same(tx.from, pending.account) && same(tx.to, config.contract), 'Transaction is not bound to this receipt');
     ensure(same(tx.input, pending.data) && quantity(tx.value) === BigInt(pending.value), 'Transaction call does not match the requested action');
     ensure(quantity(tx.nonce) === quantity(pending.nonce), 'Transaction nonce does not match this wallet request');
     if (tx.chainId != null) ensure(quantity(tx.chainId) === 8453n, 'Transaction is not on Base');
+  }
+  function validateReceipt(receipt, tx, block, pending, config) {
+    validateReceiptIdentity(receipt, pending, config);
+    validateTransactionIdentity(tx, pending, config);
+    retryable(block && same(block.hash, receipt.blockHash) && quantity(block.number) === quantity(receipt.blockNumber), 'Receipt block is no longer canonical');
+    retryable(same(tx.blockHash, receipt.blockHash) && tx.blockNumber != null && quantity(tx.blockNumber) === quantity(receipt.blockNumber), 'Transaction block is not yet bound to this receipt');
     const status = quantity(receipt.status);
     ensure(status === 0n || status === 1n, 'Invalid receipt status');
     if (status === 0n) return {state: 'reverted'};
@@ -103,20 +115,23 @@
     ensure(quantity(await rpc('eth_chainId', [])) === 8453n, 'Receipt RPC is not Base');
     const receipt = await rpc('eth_getTransactionReceipt', [pending.hash]);
     if (!receipt) return {state: 'pending'};
+    validateReceiptIdentity(receipt, pending, config);
+    retryable(receipt.blockNumber != null, 'Receipt is waiting for its Base block.');
     const [tx, block, latest] = await Promise.all([
       rpc('eth_getTransactionByHash', [pending.hash]), rpc('eth_getBlockByNumber', [receipt.blockNumber, false]), rpc('eth_getBlockByNumber', ['latest', false]),
     ]);
+    validateTransactionIdentity(tx, pending, config);
     assertFreshBlock(latest, now, config.maxAgeMs);
-    ensure(quantity(receipt.blockNumber) <= quantity(latest.number), 'Receipt is ahead of the latest verified block. Confirmation is incomplete.');
+    retryable(quantity(receipt.blockNumber) <= quantity(latest.number), 'Receipt is ahead of the latest verified block. Confirmation is incomplete.');
     const result = validateReceipt(receipt, tx, block, pending, config);
     const safe = await rpc('eth_getBlockByNumber', ['safe', false]);
-    ensure(safe && HASH.test(safe.hash), 'Safe finality is unavailable; the transaction is still being verified.');
-    ensure(quantity(safe.number) <= quantity(latest.number), 'Safe block is ahead of the latest verified block. Confirmation is incomplete.');
+    retryable(safe && HASH.test(safe.hash), 'Safe finality is unavailable; the transaction is still being verified.');
+    retryable(quantity(safe.number) <= quantity(latest.number), 'Safe block is ahead of the latest verified block. Confirmation is incomplete.');
     if (quantity(safe.number) < quantity(receipt.blockNumber)) return {...result, state: 'confirming', outcome: result.state};
     const [again, safeAgain] = await Promise.all([
       rpc('eth_getBlockByNumber', [receipt.blockNumber, false]), rpc('eth_getBlockByNumber', [safe.number, false]),
     ]);
-    ensure(again && same(again.hash, receipt.blockHash) && safeAgain && same(safeAgain.hash, safe.hash), 'Chain changed while checking finality. Waiting for a canonical receipt.');
+    retryable(again && same(again.hash, receipt.blockHash) && safeAgain && same(safeAgain.hash, safe.hash), 'Chain changed while checking finality. Waiting for a canonical receipt.');
     return {...result, state: result.state === 'reverted' ? 'reverted' : 'confirmed', receipt, finality: 'safe'};
   }
   class PendingStore {
@@ -183,5 +198,5 @@
       throw error;
     }
   }
-  return {ADDRESS, HASH, ZERO, same, ensure, quantity, toHex, word, addressWord, splitWords, decodeState, formatEth, assertEnabled, assertFreshBlock, ensureBase, loadSnapshot, validateReceipt, verifyPending, PendingStore, submit};
+  return {ADDRESS, HASH, ZERO, same, ensure, retryable, isRetryable, quantity, toHex, word, addressWord, splitWords, decodeState, formatEth, assertEnabled, assertFreshBlock, ensureBase, loadSnapshot, validateReceipt, verifyPending, PendingStore, submit};
 });

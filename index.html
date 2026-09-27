@@ -5,7 +5,7 @@
 <title>The Warp Button — Base Mini App</title>
 <meta name="description" content="The last press wins the round's prize pot. Warp Button on Base.">
 <link rel="canonical" href="https://3esign.github.io/warp/">
-<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
+<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_miniapp","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
 <meta name="fc:frame" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://3esign.github.io/warp/">
@@ -514,11 +514,15 @@
   .feed-item { gap:10px; }
   .footer { font-size:11px;line-height:1.5;color:var(--text-dim);text-align:center;margin-bottom:10px; }
   .footer a { color:var(--cyan); }
+  .host-panel { display:grid;gap:8px; }
+  .host-panel p { margin:0; }
+  .host-actions { display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
+  .host-actions .pill { min-height:36px;cursor:pointer; }
   @media(max-width:360px) {.container{padding:10px;gap:12px}.top-actions{margin-left:auto}.brand{font-size:11px}.pot-amount{font-size:28px}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 <script defer src="vendor/farcaster-miniapp-sdk-0.3.0.min.js"></script>
-<script defer src="config.js"></script><script defer src="core.js"></script><script defer src="app.js"></script>
+<script defer src="config.js"></script><script defer src="core.js"></script><script defer src="host.js"></script><script defer src="app.js"></script>
 </head>
 <body>
 <main class="container">
@@ -529,6 +533,7 @@
   <div class="button-stage"><div class="arcade-base"><div class="button-ring"><button class="warp-btn" id="mainButton" disabled><span class="btn-text" id="buttonText">PRESS</span><span class="btn-sub" id="ticketValue">0.0001 ETH + gas</span></button></div></div></div>
   <section class="king-card" aria-label="Current leader"><div class="king-info"><span class="crown-icon" aria-hidden="true">♛</span><div><div class="king-title">Current Leader / Last Press</div><div class="king-address" id="kingAddress">—</div></div></div><div class="clicks-badge"><span id="clickCounter">—</span> presses</div></section>
   <div class="actions-grid"><button class="btn-secondary btn-share" id="btnShareCast">Share Warp</button><button class="btn-secondary" id="btnConnectWallet"><span id="walletBtnText">Connect Wallet</span></button></div>
+  <section class="status-card host-panel" id="hostPanel" hidden aria-live="polite"><strong id="hostTitle"></strong><p id="hostMessage"></p><div class="host-actions"><button type="button" class="pill" id="btnSaveWarp" hidden>Save Warp</button><a class="pill" id="hostLaunchLink" rel="noopener noreferrer" hidden>Open in Farcaster</a><button type="button" class="pill" id="btnCopyWarpLink" hidden>Copy app link</button></div></section>
   <section class="status-card" id="transactionPanel" hidden aria-live="polite" aria-atomic="true"><strong id="transactionTitle"></strong><p id="transactionMessage"></p><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:4px 0;"><a id="transactionLink" target="_blank" rel="noopener noreferrer" hidden>View on BaseScan</a><button type="button" class="pill" id="btnShareTx" hidden style="cursor:pointer;border:none;background:var(--border);color:var(--cyan);font-weight:600;padding:4px 10px;">Share Tx on Warpcast</button></div><form class="recovery" id="recoveryForm" hidden><label for="recoveryHash">Recover a submitted or replacement transaction</label><input id="recoveryHash" autocomplete="off" spellcheck="false" placeholder="0x transaction hash" pattern="0x[0-9a-fA-F]{64}" required><button class="btn-secondary" type="submit">Verify transaction</button><button class="btn-secondary" id="noSubmission" type="button" hidden>I checked my wallet: nothing was sent</button></form></section>
   <section class="claim-card" id="claimPanel" hidden><strong>Your available credits</strong><span id="winningsValue">Checking…</span><button class="btn-secondary" id="btnClaim" disabled>Claim winnings</button><button class="btn-secondary" id="btnRefund" hidden disabled>Claim refund</button></section>
   <button class="btn-secondary" id="btnSettle" hidden disabled>Settle expired round</button>

@@ -12,7 +12,13 @@
     "imageUrl": "https://3esign.github.io/warp/og-image.png",
     "buttonTitle": "🔴 PRESS THE BUTTON",
     "splashImageUrl": "https://3esign.github.io/s.png",
-    "splashBackgroundColor": "#07090e"
+    "splashBackgroundColor": "#07090e",
+    "description": "Press on Base to join the prize pot. Be the last player before the timer ends, then claim the round winnings.",
+    "subtitle": "The last press wins",
+    "primaryCategory": "games",
+    "tags": ["game", "base", "onchain", "multiplayer"],
+    "noindex": false,
+    "requiredChains": ["eip155:8453"]
   },
   "miniapp": {
     "version": "1",
@@ -22,6 +28,12 @@
     "imageUrl": "https://3esign.github.io/warp/og-image.png",
     "buttonTitle": "🔴 PRESS THE BUTTON",
     "splashImageUrl": "https://3esign.github.io/s.png",
-    "splashBackgroundColor": "#07090e"
+    "splashBackgroundColor": "#07090e",
+    "description": "Press on Base to join the prize pot. Be the last player before the timer ends, then claim the round winnings.",
+    "subtitle": "The last press wins",
+    "primaryCategory": "games",
+    "tags": ["game", "base", "onchain", "multiplayer"],
+    "noindex": false,
+    "requiredChains": ["eip155:8453"]
   }
 }

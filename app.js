@@ -3,6 +3,7 @@
   const C = window.WarpCore, config = window.WARP_CONFIG;
   const $ = id => document.getElementById(id);
   let snapshot = null, account = null, provider = null, sdk = null, inMiniApp = false;
+  let hostConnection = null, hostReady = false;
   let busy = false, syncing = false, checking = false, lastError = null, credits = {winnings: 0n, refund: 0n}, lastTxHash = null;
   let store, claimStore, recoveryStore = null;
   try {
@@ -69,9 +70,13 @@
     let id = 0;
     return async (method, params) => {
       const requestId = ++id;
-      const response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jsonrpc: '2.0', id: requestId, method, params}), signal: AbortSignal.timeout(15000), credentials: 'omit', referrerPolicy: 'no-referrer'});
-      if (!response.ok) throw new Error('Base RPC is unavailable (HTTP ' + response.status + ').');
-      const body = await response.json();
+      let response, body;
+      try {
+        response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jsonrpc: '2.0', id: requestId, method, params}), signal: AbortSignal.timeout(15000), credentials: 'omit', referrerPolicy: 'no-referrer'});
+        if (!response.ok) throw new Error('Base RPC is unavailable (HTTP ' + response.status + ').');
+        body = await response.json();
+        if (body.error) throw new Error(body.error.message || 'Base RPC could not complete the request.');
+      } catch (error) { throw Object.assign(new Error(humanError(error)), {code: 'RPC_UNAVAILABLE'}); }
       C.ensure(body.jsonrpc === '2.0' && body.id === requestId && !body.error && 'result' in body, body.error?.message || 'Invalid RPC response');
       return body.result;
     };
@@ -81,7 +86,7 @@
     for (const url of config.rpcUrls) {
       try { return await task(rpcAt(url)); } catch (error) { errors.push(error); }
     }
-    throw errors.at(-1) || new Error('No Base RPC configured.');
+    throw errors.find(error => !C.isRetryable(error)) || errors.at(-1) || new Error('No Base RPC configured.');
   }
   async function sync() {
     if (!config.enabled || syncing) return;
@@ -99,7 +104,7 @@
           ]);
           nextCredits = {winnings: BigInt('0x' + C.splitWords(wins, 1)[0]), refund: BigInt('0x' + C.splitWords(refunds, 1)[0])};
           const canonical = await rpc('eth_getBlockByNumber', [next.block.number, false]);
-          C.ensure(canonical && C.same(canonical.hash, next.block.hash), 'Game block changed while checking your credits.');
+          C.retryable(canonical && C.same(canonical.hash, next.block.hash), 'Game block changed while checking your credits.');
         }
         return {next, nextCredits, creditAccount};
       });
@@ -151,6 +156,7 @@
     $('btnSettle').hidden = !config.enabled || !snapshot.expired;
   }
   async function detectProvider() {
+    await ensureMiniApp();
     if (inMiniApp) {
       const miniProvider = await sdk.wallet.getEthereumProvider();
       C.ensure(miniProvider, 'This Farcaster host does not offer an Ethereum wallet.');
@@ -241,7 +247,10 @@
       for (const entry of entries) {
         if (!entry.record?.hash) continue;
         try { await verifyRecord(entry.store, entry.record); }
-        catch (error) { showMessage('Confirmation not available', humanError(error) + ' Your pending record is retained.', 'error', entry.record.hash); }
+        catch (error) {
+          if (C.isRetryable(error)) showMessage('Transaction submitted · checking Base', 'Base confirmation is still updating. We will check again automatically. Your transaction is saved; do not send it again.', '', entry.record.hash);
+          else showMessage('Confirmation not available', humanError(error) + ' Your pending record is retained.', 'error', entry.record.hash);
+        }
       }
     } catch (error) { showMessage('Recovery required', humanError(error), 'error'); }
     finally { checking = false; render(); }
@@ -299,6 +308,7 @@
   async function shareCast(customTx = null) {
     const { text, shareUrl } = getShareContent(customTx);
     try {
+      await ensureMiniApp();
       if (inMiniApp && sdk?.actions?.composeCast) {
         try {
           await sdk.actions.composeCast({ text, embeds: [shareUrl], channelKey: 'base' });
@@ -333,6 +343,20 @@
   $('rulesModal').addEventListener('click', event => { if (event.target === $('rulesModal')) closeRules(); });
   $('rulesModal').addEventListener('keydown', event => { if (event.key === 'Escape') closeRules(); if (event.key === 'Tab') { event.preventDefault(); $('btnCloseRules').focus(); } });
   window.addEventListener('storage', event => { if (store && (event.key === store.key || claimStore && event.key === claimStore.key)) { try { showPending(pendingEntry()?.record); render(); verify(); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); } } });
+  async function ensureMiniApp() {
+    if (inMiniApp && hostReady) return true;
+    sdk = window.miniapp?.sdk;
+    if (!sdk) return false;
+    if (hostConnection) return hostConnection;
+    hostConnection = (async () => {
+      // The bridge may become available after initial page load.
+      inMiniApp = await sdk.isInMiniApp(2000);
+      if (inMiniApp && !hostReady) { await sdk.actions.ready(); hostReady = true; }
+      await window.WarpHost?.init({sdk, inMiniApp, publicUrl: config.publicUrl, launchUrl: config.farcasterUrl});
+      return inMiniApp;
+    })();
+    try { return await hostConnection; } finally { hostConnection = null; }
+  }
   async function init() {
     render();
     try {
@@ -343,14 +367,13 @@
     sdk = window.miniapp?.sdk;
     if (sdk) {
       try {
-        inMiniApp = await sdk.isInMiniApp();
-        if (inMiniApp) await sdk.actions.ready();
-      } catch (error) { showMessage('Farcaster connection unavailable', humanError(error), 'error'); }
+        await ensureMiniApp();
+      } catch (error) { showMessage('Farcaster connection pending', 'The app connection will be checked again when you connect or share.'); }
     } else if (window.parent !== window || window.ReactNativeWebView) showMessage('Farcaster SDK unavailable', 'Reload the mini app. Wallet actions will remain unavailable until the host connects.', 'error');
     await sync(); await verify();
     setInterval(() => { if (!document.hidden) { sync(); verify(); } }, 10000);
     setInterval(render, 1000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { sync(); verify(); } });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { sync(); verify(); ensureMiniApp().catch(() => {}); } });
   }
   init().catch(error => showMessage('Initialization failed', humanError(error), 'error'));
 })();

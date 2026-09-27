@@ -13,6 +13,7 @@ window.WARP_CONFIG = Object.freeze({
   maxAgeMs: 90000,
   rpcUrls: ['https://base-rpc.publicnode.com', 'https://mainnet.base.org'],
   publicUrl: 'https://3esign.github.io/warp/',
+  farcasterUrl: 'https://farcaster.xyz/miniapps/D6FBRP9_zwlT/the-warp-button',
   explorer: 'https://basescan.org/tx/',
   abi: {
     state: '0xb7d0628b',
