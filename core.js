@@ -139,7 +139,7 @@
       this.storage.removeItem(this.key);
     }
   }
-  async function submit({provider, config, snapshot, account, action = 'press', store, now = Date.now()}) {
+  async function submit({provider, rpc, config, snapshot, account, action = 'press', store, now = Date.now()}) {
     assertEnabled(config);
     ensure(!store.read(), 'A previous transaction still needs verification.');
     ensure(snapshot && now >= snapshot.loadedAt && now - snapshot.loadedAt <= config.maxAgeMs, 'Refresh the game before sending.');
@@ -149,7 +149,18 @@
     ensure(Array.isArray(accounts) && same(accounts[0], account), 'Wallet account changed. Reconnect before sending.');
     ensure(snapshot.block && HASH.test(snapshot.block.hash || ''), 'Verified submission block is missing. Refresh before sending.');
     quantity(snapshot.block.number);
-    const nonce = toHex(quantity(await provider.request({method: 'eth_getTransactionCount', params: [account, 'pending']})));
+    let rawNonce = null;
+    if (typeof rpc === 'function') {
+      try { rawNonce = await rpc('eth_getTransactionCount', [account, 'pending']); } catch {}
+    }
+    if (rawNonce == null && provider && typeof provider.request === 'function') {
+      try {
+        rawNonce = await provider.request({method: 'eth_getTransactionCount', params: [account, 'pending']});
+      } catch (err) {
+        if (!rpc) throw err;
+      }
+    }
+    const nonce = toHex(quantity(rawNonce));
     let data, value = '0';
     if (action === 'press') { data = config.abi.press; value = snapshot.ticket.toString(); }
     else if (action === 'settle') { ensure(snapshot.expired, 'The round is still active.'); data = config.abi.settle; }

@@ -167,7 +167,8 @@
         await sync();
         C.ensure(!lastError, humanError(lastError));
         showMessage('Review in your wallet', 'Your wallet will show the action, ticket (if any) and gas. Confirmation is checked on Base after submission.');
-        const record = await C.submit({provider, config, snapshot, account, action, store});
+        const rpc = (method, params) => withRpc(r => r(method, params));
+        const record = await C.submit({provider, rpc, config, snapshot, account, action, store});
         showPending(record);
       });
     } catch (error) {
