@@ -3,7 +3,7 @@
   const C = window.WarpCore, config = window.WARP_CONFIG;
   const $ = id => document.getElementById(id);
   let snapshot = null, account = null, provider = null, sdk = null, inMiniApp = false;
-  let busy = false, syncing = false, checking = false, lastError = null, credits = {winnings: 0n, refund: 0n};
+  let busy = false, syncing = false, checking = false, lastError = null, credits = {winnings: 0n, refund: 0n}, lastTxHash = null;
   let store;
   try { store = new C.PendingStore(window.localStorage, 'warp:v2:pending:' + config.chainId + ':' + (config.contract || 'preview')); }
   catch { showMessage('Storage unavailable', 'This browser cannot safely recover pending transactions. Play is disabled.', 'error'); }
@@ -21,11 +21,21 @@
     $('transactionPanel').hidden = false;
     $('transactionPanel').className = 'status-card' + (kind ? ' ' + kind : '');
     $('transactionTitle').textContent = title; $('transactionMessage').textContent = message;
-    $('transactionLink').hidden = !C.HASH.test(hash || '');
-    if (hash) $('transactionLink').href = config.explorer + hash;
+    const hasHash = C.HASH.test(hash || '');
+    $('transactionLink').hidden = !hasHash;
+    if (hasHash) {
+      $('transactionLink').href = config.explorer + hash;
+      lastTxHash = hash;
+    }
+    const btnShareTx = $('btnShareTx');
+    if (btnShareTx) {
+      btnShareTx.hidden = !hasHash;
+      if (hasHash) btnShareTx.dataset.tx = hash;
+    }
   }
   function showPending(record) {
     if (!record) { $('recoveryForm').hidden = true; return; }
+    if (record.hash) lastTxHash = record.hash;
     if (record.version !== 2 || !record.nonce || !record.observedBlock || !record.observedBlockHash) {
       $('recoveryForm').hidden = true;
       $('noSubmission').hidden = true;
@@ -169,6 +179,7 @@
         showMessage('Review in your wallet', 'Your wallet will show the action, ticket (if any) and gas. Confirmation is checked on Base after submission.');
         const rpc = (method, params) => withRpc(r => r(method, params));
         const record = await C.submit({provider, rpc, config, snapshot, account, action, store});
+        if (record?.hash) lastTxHash = record.hash;
         showPending(record);
       });
     } catch (error) {
@@ -177,6 +188,7 @@
     } finally { busy = false; render(); verify(); }
   }
   function addConfirmed(record) {
+    if (record?.hash) lastTxHash = record.hash;
     const list = $('feedList');
     if (!list.dataset.hasActions) { list.replaceChildren(); list.dataset.hasActions = 'yes'; }
     const item = document.createElement('div'), note = document.createElement('span'), who = document.createElement('span');
@@ -190,6 +202,7 @@
     let record;
     try { record = pending(); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); return; }
     if (!record?.hash) return;
+    lastTxHash = record.hash;
     checking = true;
     try {
       const result = await withRpc(rpc => C.verifyPending(rpc, record, config));
@@ -201,7 +214,10 @@
           showMessage('Confirmed on Base', ({press: 'Your press was included and verified.', settle: 'The round was settled. The winner can claim their credit.', claim: 'Your winnings were claimed.', refund: 'Your refund was claimed.'})[record.action] + ' The transaction has reached safe confirmation.', 'success', record.hash);
         } else showMessage('Transaction reverted', 'Base confirmed the transaction failed. The game action did not complete; network gas may still have been charged.', 'error', record.hash);
         await sync();
-      } else if (result.state === 'confirming') showMessage('Included · confirming on Base', 'The receipt is canonical. Waiting for safe confirmation before marking the action successful.', '', record.hash);
+      } else if (result.state === 'confirming') {
+        showMessage('Included · confirming on Base', 'The receipt is canonical. Waiting for safe confirmation before marking the action successful.', '', record.hash);
+        await sync();
+      }
       else showMessage('Waiting for a receipt', 'This transaction may be pending, replaced or dropped. It will not be sent again automatically. Check your wallet; paste a replacement hash below if needed.', '', record.hash);
     } catch (error) { showMessage('Confirmation not available', humanError(error) + ' Your pending record is retained.', 'error', record.hash); }
     finally { checking = false; render(); }
@@ -226,6 +242,7 @@
         C.ensure(current && current.createdAt === record.createdAt && current.hash === record.hash, 'Another tab updated the transaction. Refresh before recovery.');
         store.write(candidate);
       });
+      lastTxHash = candidate.hash;
       showPending(candidate); await verify();
     } catch (error) { showMessage('Recovery not verified', humanError(error), 'error'); }
   });
@@ -242,14 +259,50 @@
       showMessage('Unsubmitted request cleared', 'The saved request was cleared after your wallet-history check.'); render();
     } catch (error) { showMessage('Recovery required', humanError(error), 'error'); }
   });
-  $('btnShareCast').addEventListener('click', async () => {
-    const text = config.enabled ? 'The Warp Button on Base. Be the last press before the round ends.' : 'The Warp Button V2 preview. Play opens after release verification.';
+  function getShareContent(customTx = null) {
+    const roundNum = snapshot?.round ? snapshot.round.toString() : '2';
+    const potEth = snapshot?.pot ? C.formatEth(snapshot.pot) : '0.0001';
+    const activeTx = customTx || pending()?.hash || lastTxHash;
+    let text;
+    if (activeTx && C.HASH.test(activeTx)) {
+      text = '🔴 I pressed The Warp Button in Round #' + roundNum + ' on Base! Pot: ' + potEth + ' ETH. Be the last press before the timer ends to win! ⏱️\n\nTx: ' + config.explorer + activeTx + '\n\n#warp #base $WARP @clanker';
+    } else {
+      text = '🔴 The Warp Button on Base! Round #' + roundNum + ' prize pot: ' + potEth + ' ETH. Be the last press before the round countdown ends! ⏱️\n\n#warp #base $WARP @clanker';
+    }
+    const shareUrl = config.publicUrl;
+    const warpcastUrl = 'https://warpcast.com/~/compose?text=' + encodeURIComponent(text) + '&embeds[]=' + encodeURIComponent(shareUrl) + '&channelKey=base';
+    return { text, shareUrl, warpcastUrl, activeTx };
+  }
+  async function shareCast(customTx = null) {
+    const { text, shareUrl, warpcastUrl } = getShareContent(customTx);
     try {
-      if (inMiniApp) await sdk.actions.composeCast({text, embeds: [config.publicUrl]});
-      else if (navigator.share) await navigator.share({title: 'The Warp Button', text, url: config.publicUrl});
-      else window.open('https://farcaster.xyz/~/compose?text=' + encodeURIComponent(text) + '&embeds[]=' + encodeURIComponent(config.publicUrl), '_blank', 'noopener,noreferrer');
-    } catch (error) { if (error?.name !== 'AbortError') showMessage('Share unavailable', humanError(error), 'error'); }
-  });
+      if (inMiniApp && sdk?.actions?.composeCast) {
+        try {
+          await sdk.actions.composeCast({ text, embeds: [shareUrl], channelKey: 'base' });
+          return;
+        } catch (composeErr) {
+          if (composeErr?.name === 'AbortError' || composeErr?.message?.includes('rejected')) return;
+        }
+      }
+      if (inMiniApp && sdk?.actions?.openUrl) {
+        try {
+          await sdk.actions.openUrl(warpcastUrl);
+          return;
+        } catch {}
+      }
+      const opened = window.open(warpcastUrl, '_blank', 'noopener,noreferrer');
+      if (!opened && typeof window.location !== 'undefined') {
+        window.location.href = warpcastUrl;
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') showMessage('Share unavailable', humanError(error), 'error');
+    }
+  }
+  $('btnShareCast').addEventListener('click', () => shareCast());
+  const btnShareTx = $('btnShareTx');
+  if (btnShareTx) {
+    btnShareTx.addEventListener('click', () => shareCast(btnShareTx.dataset.tx || lastTxHash));
+  }
   let priorFocus;
   const closeRules = () => { $('rulesModal').style.display = 'none'; priorFocus?.focus(); };
   $('btnRules').addEventListener('click', () => { priorFocus = document.activeElement; $('rulesModal').style.display = 'flex'; $('btnCloseRules').focus(); });
@@ -259,7 +312,11 @@
   window.addEventListener('storage', event => { if (store && event.key === store.key) { try { showPending(pending()); render(); verify(); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); } } });
   async function init() {
     render();
-    try { showPending(pending()); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); }
+    try {
+      const initial = pending();
+      if (initial?.hash) lastTxHash = initial.hash;
+      showPending(initial);
+    } catch (error) { showMessage('Recovery required', humanError(error), 'error'); }
     sdk = window.miniapp?.sdk;
     if (sdk) {
       try {
