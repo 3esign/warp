@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Warp Button — Base Mini App</title>
-<meta name="description" content="The last press wins the round's prize pot. Warp V2 preview: play opens after release verification.">
+<meta name="description" content="The last press wins the round's prize pot. Warp Button on Base.">
 <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
 <meta name="fc:frame" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
-<meta property="og:title" content="The Warp Button"><meta property="og:description" content="The last press wins the round's prize pot. Warp V2 preview."><meta property="og:image" content="https://3esign.github.io/warp/og-image.png"><meta name="twitter:card" content="summary_large_image">
+<meta property="og:title" content="The Warp Button"><meta property="og:description" content="The last press wins the round's prize pot. Warp Button on Base."><meta property="og:image" content="https://3esign.github.io/warp/og-image.png"><meta name="twitter:card" content="summary_large_image">
 <style>
     :root {
       --bg: #07080f;
@@ -508,17 +508,17 @@
 </head>
 <body>
 <main class="container">
-  <div class="top-bar"><h1 class="brand"><span class="brand-dot" aria-hidden="true"></span>WARP BUTTON</h1><div class="top-actions"><button class="pill" id="btnRules">RULES</button><span class="pill" id="badgeNetwork">V2 PREVIEW</span></div></div>
-  <section class="status-card" id="releaseStatus"><strong>Preview · play is not open yet</strong><p>The new game is being verified. No funds can be sent from this preview.</p></section>
+  <div class="top-bar"><h1 class="brand"><span class="brand-dot" aria-hidden="true"></span>WARP BUTTON</h1><div class="top-actions"><button class="pill" id="btnRules">RULES</button><span class="pill" id="badgeNetwork">BASE</span></div></div>
+  <section class="status-card" id="releaseStatus"><strong>Connecting to Base…</strong><p>Loading live game state and prize pot from Base.</p></section>
   <section class="pot-card" aria-label="Prize pot"><div class="pot-label">Prize Pot · Round <span id="roundNumber">—</span></div><div class="pot-amount"><span id="potValue">—</span><span class="pot-symbol">ETH</span></div><div class="pot-fiat" id="potNote">Live values appear when the game opens</div></section>
-  <div class="timer-container"><div class="timer-box" id="timerBox"><div class="timer-digits" id="timerDigits">--:--</div></div><div class="timer-status" id="timerStatus">AWAITING RELEASE</div></div>
-  <div class="button-stage"><div class="arcade-base"><div class="button-ring"><button class="warp-btn" id="mainButton" disabled><span class="btn-text" id="buttonText">PREVIEW</span><span class="btn-sub" id="ticketValue">Play opens soon</span></button></div></div></div>
+  <div class="timer-container"><div class="timer-box" id="timerBox"><div class="timer-digits" id="timerDigits">--:--</div></div><div class="timer-status" id="timerStatus">AWAITING SYNC</div></div>
+  <div class="button-stage"><div class="arcade-base"><div class="button-ring"><button class="warp-btn" id="mainButton" disabled><span class="btn-text" id="buttonText">PRESS</span><span class="btn-sub" id="ticketValue">0.0001 ETH + gas</span></button></div></div></div>
   <section class="king-card" aria-label="Current leader"><div class="king-info"><span class="crown-icon" aria-hidden="true">♛</span><div><div class="king-title">Current Leader / Last Press</div><div class="king-address" id="kingAddress">—</div></div></div><div class="clicks-badge"><span id="clickCounter">—</span> presses</div></section>
   <div class="actions-grid"><button class="btn-secondary btn-share" id="btnShareCast">Share Warp</button><button class="btn-secondary" id="btnConnectWallet"><span id="walletBtnText">Connect Wallet</span></button></div>
   <section class="status-card" id="transactionPanel" hidden aria-live="polite" aria-atomic="true"><strong id="transactionTitle"></strong><p id="transactionMessage"></p><a id="transactionLink" target="_blank" rel="noopener noreferrer" hidden>View on BaseScan</a><form class="recovery" id="recoveryForm" hidden><label for="recoveryHash">Recover a submitted or replacement transaction</label><input id="recoveryHash" autocomplete="off" spellcheck="false" placeholder="0x transaction hash" pattern="0x[0-9a-fA-F]{64}" required><button class="btn-secondary" type="submit">Verify transaction</button><button class="btn-secondary" id="noSubmission" type="button" hidden>I checked my wallet: nothing was sent</button></form></section>
   <section class="claim-card" id="claimPanel" hidden><strong>Your available credits</strong><span id="winningsValue">Checking…</span><button class="btn-secondary" id="btnClaim" disabled>Claim winnings</button><button class="btn-secondary" id="btnRefund" hidden disabled>Claim refund</button></section>
   <button class="btn-secondary" id="btnSettle" hidden disabled>Settle expired round</button>
-  <section class="feed-card"><div class="feed-title"><span>Your confirmed activity</span><span id="feedLiveStatus">Preview</span></div><div id="feedList"><div class="feed-item"><span>No verified actions yet</span></div></div></section>
+  <section class="feed-card"><div class="feed-title"><span>Your confirmed activity</span><span id="feedLiveStatus">Live Base</span></div><div id="feedList"><div class="feed-item"><span>No verified actions yet</span></div></div></section>
   <p class="footer">85% prize pot · 10% next round · 5% creator<br>Winner claims the full displayed prize pot after settlement.<br><button class="pill" id="btnRefresh">Refresh status</button></p>
 </main>
 <div class="modal-overlay" id="rulesModal" role="dialog" aria-modal="true" aria-labelledby="rulesTitle" tabindex="-1"><div class="modal-content"><h2 class="modal-title" id="rulesTitle">How Warp V2 works</h2><div class="modal-body">
@@ -526,7 +526,7 @@
 <p><strong>Ticket and timer.</strong> The exact ticket is read from the game on Base; wallet gas is extra. A round starts with 10 minutes. Each press adds 30 seconds, capped at 30 minutes remaining. Under 60 seconds, a press resets the timer to 60 seconds.</p>
 <p><strong>Every ticket:</strong> 85% joins the prize pot, 10% seeds the next round, 5% becomes the creator's claimable fee. External ETH deposits split 50% to the pot and 50% to the creator's claimable balance.</p>
 <p><strong>Settlement and claims.</strong> Anyone can settle an expired round; the next press also settles it. The winner receives a claimable balance and chooses when to withdraw. A transaction is required: the timer cannot send one by itself.</p>
-<p><strong>Token rewards.</strong> No token trading income is included or promised in this preview. Reward collection only applies after its separate release verification.</p>
+<p><strong>Token rewards.</strong> WETH fees from Clanker LP are forwarded to the prize pot and creator via the verified fee router. Non-WETH token rewards are held in custody.</p>
 <p><strong>Before you play.</strong> Tickets are paid entries and are not returned when another player wins. A countdown is an estimate from the latest verified block; the contract decides which press arrives in time.</p>
 </div><button class="modal-close" id="btnCloseRules">Got it</button></div></div>
 <noscript><p>This game needs JavaScript. Transactions are disabled.</p></noscript>
