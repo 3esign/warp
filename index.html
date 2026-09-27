@@ -1,21 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>The Warp Button — Base Mini App</title>
-
-  <!-- Farcaster Mini App & Frame Metadata -->
-  <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"🔴 PRESS THE BUTTON","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/warp/icon.png","splashBackgroundColor":"#07080f"}}}' />
-  <meta name="fc:frame" content='{"version":"next","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Play The Warp Button","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/warp/icon.png","splashBackgroundColor":"#07080f"}}}' />
-  
-  <!-- OpenGraph / Social -->
-  <meta property="og:title" content="The Warp Button — Autonomous FOMO Pot on Base">
-  <meta property="og:description" content="Pay 0.0001 ETH to reset the clock. If timer hits zero, the last player takes 80% of the jackpot.">
-  <meta property="og:image" content="https://3esign.github.io/warp/og-image.png">
-  <meta name="twitter:card" content="summary_large_image">
-
-  <style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Warp Button — Base Mini App</title>
+<meta name="description" content="The last press wins the round's prize pot. Warp V2 preview: play opens after release verification.">
+<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
+<meta name="fc:frame" content='{"version":"1","imageUrl":"https://3esign.github.io/warp/og-image.png","button":{"title":"Open Warp","action":{"type":"launch_frame","name":"The Warp Button","url":"https://3esign.github.io/warp/","splashImageUrl":"https://3esign.github.io/s.png","splashBackgroundColor":"#07080f"}}}'>
+<meta property="og:title" content="The Warp Button"><meta property="og:description" content="The last press wins the round's prize pot. Warp V2 preview."><meta property="og:image" content="https://3esign.github.io/warp/og-image.png"><meta name="twitter:card" content="summary_large_image">
+<style>
     :root {
       --bg: #07080f;
       --card: #0f121d;
@@ -482,442 +474,60 @@
       0% { box-shadow: inset 0 0 10px var(--accent-glow), 0 0 10px var(--accent-glow); }
       100% { box-shadow: inset 0 0 25px var(--accent-glow), 0 0 35px var(--accent-glow); }
     }
-  </style>
+  
+  :root { --text-dim: #9ba7bb; }
+  .pill, .btn-secondary { min-height:44px; }
+  .top-bar { flex-wrap:wrap; gap:8px; }
+  .brand { font-size:12px; }
+  .top-actions { gap:4px; }
+  .status-card { border:1px solid var(--gold);border-radius:12px;padding:12px;font-size:12px;line-height:1.5;color:#f7d577; }
+  .status-card p { margin-top:4px; }
+  .status-card.error { border-color:var(--accent);color:#ff95b0; }
+  .status-card.success { border-color:var(--green);color:#7ee5c5; }
+  .status-card a { color:var(--cyan);word-break:break-all; }
+  [hidden] { display:none !important; }
+  .warp-btn:disabled { cursor:not-allowed;filter:saturate(.45);opacity:.75; }
+  button:disabled { cursor:not-allowed;opacity:.6; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline:3px solid var(--cyan);outline-offset:4px; }
+  .pot-amount { font-size:clamp(24px,8vw,38px); overflow-wrap:anywhere; }
+  .pot-amount #potValue { max-width:310px; }
+  .recovery { display:flex;flex-direction:column;gap:8px; margin-top:10px; }
+  .recovery input { padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;user-select:text; }
+  .claim-card { border:1px solid var(--border);border-radius:12px;padding:12px;font-size:12px;display:grid;gap:8px; }
+  .modal-content { max-height:85vh;overflow-y:auto; }
+  .modal-body p { margin-bottom:10px; }
+  .feed-card { flex:none;min-height:78px;max-height:180px; }
+  .feed-item { gap:10px; }
+  .footer { font-size:11px;line-height:1.5;color:var(--text-dim);text-align:center;margin-bottom:10px; }
+  .footer a { color:var(--cyan); }
+  @media(max-width:360px) {.container{padding:10px;gap:12px}.top-actions{margin-left:auto}.brand{font-size:11px}.pot-amount{font-size:28px}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+<script defer src="vendor/farcaster-miniapp-sdk-0.3.0.min.js"></script>
+<script defer src="config.js"></script><script defer src="core.js"></script><script defer src="app.js"></script>
 </head>
 <body>
-
-  <div class="container">
-    <!-- Top Bar -->
-    <div class="top-bar">
-      <div class="brand">
-        <div class="brand-dot"></div>
-        <span>WARP BUTTON</span>
-      </div>
-      <div class="top-actions">
-        <button class="pill" id="btnAudioToggle">🔊 SFX ON</button>
-        <button class="pill" id="btnRules">❓ RULES</button>
-        <div class="pill active" id="badgeNetwork">BASE</div>
-      </div>
-    </div>
-
-    <!-- Pot Card -->
-    <div class="pot-card">
-      <div class="pot-label">Jackpot Pot (Round <span id="roundNumber">1</span>)</div>
-      <div class="pot-amount">
-        <span id="potValue">0.0000</span>
-        <span class="pot-symbol">ETH</span>
-      </div>
-      <div class="pot-fiat" id="potUsd">≈ $0.00 USD</div>
-    </div>
-
-    <!-- Timer Area -->
-    <div class="timer-container">
-      <div class="timer-box" id="timerBox">
-        <div class="timer-digits" id="timerDigits">10:00</div>
-      </div>
-      <div class="timer-status" id="timerStatus">⚡ ACTIVE COUNTDOWN</div>
-    </div>
-
-    <!-- Giant Arcade Button -->
-    <div class="button-stage">
-      <div class="arcade-base">
-        <div class="button-ring">
-          <button class="warp-btn" id="mainButton">
-            <span class="btn-text">PRESS</span>
-            <span class="btn-sub">0.0001 ETH</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- King of the Hill Card -->
-    <div class="king-card">
-      <div class="king-info">
-        <div class="crown-icon">👑</div>
-        <div>
-          <div class="king-title">Current Leader / Last Press</div>
-          <div class="king-address" id="kingAddress">None (Be First!)</div>
-        </div>
-      </div>
-      <div class="clicks-badge">
-        <span id="clickCounter">0</span> Clicks
-      </div>
-    </div>
-
-    <!-- Secondary Actions -->
-    <div class="actions-grid">
-      <button class="btn-secondary btn-share" id="btnShareCast">
-        🚀 Share Pot to Feed
-      </button>
-      <button class="btn-secondary" id="btnConnectWallet">
-        👛 <span id="walletBtnText">Connect Wallet</span>
-      </button>
-    </div>
-
-    <!-- Live Event Feed -->
-    <div class="feed-card">
-      <div class="feed-title">
-        <span>Live Round Activity</span>
-        <span id="feedLiveStatus">● Synced</span>
-      </div>
-      <div id="feedList">
-        <div class="feed-item">
-          <span>System</span>
-          <span class="feed-player">Round 1 initialized</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Rules Modal -->
-  <div class="modal-overlay" id="rulesModal">
-    <div class="modal-content">
-      <div class="modal-title">🎮 How The Warp Button Works</div>
-      <div class="modal-body">
-        <p><strong>1. The Objective:</strong> Be the last person to press the button before the countdown clock hits 00:00.</p><br>
-        <p><strong>2. Cost & Timing:</strong> Each press costs <strong>0.0001 ETH</strong> (~$0.30 on Base) and adds <strong>+30 seconds</strong> to the clock (capped at 30 mins).</p><br>
-        <p><strong>3. Sudden Death:</strong> When remaining time is under <strong>60 seconds</strong>, every click resets the timer to exactly 60s for maximum tension.</p><br>
-        <p><strong>4. Pot Distribution:</strong></p>
-        <ul style="padding-left: 18px; margin-top: 4px;">
-          <li>🏆 <strong>80%</strong> sent directly to the last clicker (Winner).</li>
-          <li>🌱 <strong>10%</strong> seeds the next round pot automatically.</li>
-          <li>🔥 <strong>10%</strong> in-game fee (split 50% to creator wallet, 50% to pot).</li>
-        </ul><br>
-        <p><strong>5. 50/50 Trading Fee Engine:</strong> External DEX / token trading fees (Clanker/Flaunch) automatically split: <strong>50%</strong> directly to creator wallet and <strong>50%</strong> straight into the jackpot pot!</p>
-      </div>
-      <button class="modal-close" id="btnCloseRules">Got it</button>
-    </div>
-  </div>
-
-  <script>
-    // --- Configuration ---
-    const BASE_CHAIN_ID = '0x2105'; // 8453 in hex
-    const BASE_RPC_URL = 'https://mainnet.base.org';
-    const CONTRACT_ADDRESS = '0xaA1D8A5e5654ca1E72A51DCCc96df228CE896C6a'; // Deployed on Base mainnet 2026-09-26
-    const TICKET_PRICE_WEI = '0x5af3107a4000'; // 0.0001 ETH (10^14 wei)
-    const ETH_USD_PRICE = 3000;
-
-    // --- State Variables ---
-    let userAddress = null;
-    let sfxEnabled = true;
-    let secondsLeft = 600;
-    let currentPotWei = 0n;
-    let currentRound = 1;
-    let currentKing = 'None';
-    let totalClicks = 0;
-    let timerInterval = null;
-
-    // --- Audio Synthesizer (Web Audio API, Zero Dependencies) ---
-    const AudioEngine = {
-      ctx: null,
-      init() {
-        if (!this.ctx) {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          if (AudioContext) this.ctx = new AudioContext();
-        }
-      },
-      beep(freq, duration, type = 'sine') {
-        if (!sfxEnabled) return;
-        this.init();
-        if (!this.ctx) return;
-        try {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = type;
-          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
-          osc.start();
-          osc.stop(this.ctx.currentTime + duration);
-        } catch(e) {}
-      },
-      clickThump() {
-        if (!sfxEnabled) return;
-        this.init();
-        if (!this.ctx) return;
-        try {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.12);
-          gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
-          osc.start();
-          osc.stop(this.ctx.currentTime + 0.12);
-        } catch(e) {}
-      },
-      tick() {
-        this.beep(880, 0.04, 'square');
-      },
-      fanfare() {
-        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-          setTimeout(() => this.beep(freq, 0.25, 'triangle'), i * 120);
-        });
-      }
-    };
-
-    // --- Farcaster Mini App Handshake ---
-    function initFarcaster() {
-      // Signal ready to parent iframe
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'fc:frame:ready' }, '*');
-      }
-    }
-
-    // --- Provider Detection (Warpcast In-App Wallet or Injected Web3) ---
-    function getEthereumProvider() {
-      // 1. Warpcast embedded miniapp provider
-      if (window.farcaster?.wallet?.ethProvider) {
-        return window.farcaster.wallet.ethProvider;
-      }
-      // 2. Standard EIP-1193 injected provider (MetaMask, Rabby, Coinbase Wallet)
-      if (window.ethereum) {
-        return window.ethereum;
-      }
-      return null;
-    }
-
-    // --- UI Update Helpers ---
-    function formatAddress(addr) {
-      if (!addr || addr === 'None' || addr === '0x0000000000000000000000000000000000000000') return 'None (Be First!)';
-      return addr.slice(0, 6) + '...' + addr.slice(-4);
-    }
-
-    function formatTime(sec) {
-      if (sec <= 0) return '00:00';
-      const m = Math.floor(sec / 60);
-      const s = sec % 60;
-      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-
-    function updateUi() {
-      const ethAmount = Number(currentPotWei) / 1e18;
-      document.getElementById('potValue').textContent = ethAmount.toFixed(4);
-      document.getElementById('potUsd').textContent = `≈ $${(ethAmount * ETH_USD_PRICE).toFixed(2)} USD`;
-      document.getElementById('roundNumber').textContent = currentRound;
-      document.getElementById('kingAddress').textContent = formatAddress(currentKing);
-      document.getElementById('clickCounter').textContent = totalClicks;
-
-      const timerBox = document.getElementById('timerBox');
-      const timerDigits = document.getElementById('timerDigits');
-      const timerStatus = document.getElementById('timerStatus');
-
-      timerDigits.textContent = formatTime(secondsLeft);
-
-      if (secondsLeft <= 0) {
-        timerBox.classList.remove('sudden-death');
-        timerStatus.className = 'timer-status danger';
-        timerStatus.textContent = '🏆 ROUND COMPLETED — AWAITING SETTLEMENT';
-      } else if (secondsLeft <= 60) {
-        timerBox.classList.add('sudden-death');
-        timerStatus.className = 'timer-status danger';
-        timerStatus.textContent = '⚠️ SUDDEN DEATH MODE (EVERY CLICK = 60S)';
-      } else {
-        timerBox.classList.remove('sudden-death');
-        timerStatus.className = 'timer-status';
-        timerStatus.textContent = '⚡ ACTIVE COUNTDOWN';
-      }
-    }
-
-    function addFeedItem(player, note) {
-      const list = document.getElementById('feedList');
-      const item = document.createElement('div');
-      item.className = 'feed-item';
-      item.innerHTML = `<span>${note}</span><span class="feed-player">${formatAddress(player)}</span>`;
-      list.insertBefore(item, list.firstChild);
-      if (list.children.length > 8) list.removeChild(list.lastChild);
-    }
-
-    // --- Timer Countdown Tick ---
-    function startLocalTimer() {
-      if (timerInterval) clearInterval(timerInterval);
-      timerInterval = setInterval(() => {
-        if (secondsLeft > 0) {
-          secondsLeft--;
-          if (secondsLeft <= 10 && secondsLeft > 0) {
-            AudioEngine.tick();
-          }
-          updateUi();
-        }
-      }, 1000);
-    }
-
-    // --- On-Chain Fetch via Base RPC (Zero Dependency) ---
-    async function syncGameState() {
-      if (CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000') {
-        // Mock demo mode until live CA is plugged in
-        return;
-      }
-
-      try {
-        // getGameState() function selector: 0xb7d0628b
-        const res = await fetch(BASE_RPC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'eth_call',
-            params: [{ to: CONTRACT_ADDRESS, data: '0xb7d0628b' }, 'latest']
-          })
-        });
-
-        const data = await res.json();
-        if (data.result && data.result.length >= 130) {
-          // Decode ABI encoded tuple
-          const hex = data.result.slice(2);
-          const rId = BigInt('0x' + hex.slice(0, 64));
-          const pot = BigInt('0x' + hex.slice(64, 128));
-          const endTime = BigInt('0x' + hex.slice(256, 320));
-          const lastPlr = '0x' + hex.slice(344, 384);
-          const clicks = BigInt('0x' + hex.slice(384, 448));
-          const expired = BigInt('0x' + hex.slice(448, 512)) !== 0n;
-          const remSec = BigInt('0x' + hex.slice(512, 576));
-
-          currentRound = Number(rId);
-          currentPotWei = pot;
-          currentKing = lastPlr;
-          totalClicks = Number(clicks);
-          secondsLeft = Number(remSec);
-
-          document.getElementById('feedLiveStatus').textContent = '● Synced';
-          updateUi();
-        }
-      } catch (err) {
-        console.warn('RPC Sync error:', err);
-      }
-    }
-
-    // --- Button Press Action ---
-    async function handlePress() {
-      AudioEngine.clickThump();
-      if (navigator.vibrate) navigator.vibrate([30, 20, 40]);
-
-      const btn = document.getElementById('mainButton');
-      btn.classList.add('pressed');
-      setTimeout(() => btn.classList.remove('pressed'), 150);
-
-      const provider = getEthereumProvider();
-      if (!provider) {
-        // If opened outside Warpcast / no Web3, trigger demo mock click
-        simulateMockClick();
-        return;
-      }
-
-      try {
-        // Request account
-        const accounts = await provider.request({ method: 'eth_requestAccounts' });
-        userAddress = accounts[0];
-        document.getElementById('walletBtnText').textContent = formatAddress(userAddress);
-
-        // Check & Switch network to Base
-        try {
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: BASE_CHAIN_ID }]
-          });
-        } catch (switchErr) {
-          if (switchErr.code === 4902) {
-            await provider.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: BASE_CHAIN_ID,
-                chainName: 'Base Mainnet',
-                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-                rpcUrls: [BASE_RPC_URL],
-                blockExplorerUrls: ['https://basescan.org']
-              }]
-            });
-          }
-        }
-
-        if (CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000') {
-          simulateMockClick();
-          return;
-        }
-
-        // Send transaction: pressButton() selector is 0xc8b5da66
-        const txHash = await provider.request({
-          method: 'eth_sendTransaction',
-          params: [{
-            from: userAddress,
-            to: CONTRACT_ADDRESS,
-            value: TICKET_PRICE_WEI,
-            data: '0xc8b5da66'
-          }]
-        });
-
-        addFeedItem(userAddress, 'Pressed the button!');
-        syncGameState();
-      } catch (err) {
-        console.error('Transaction rejected/failed:', err);
-      }
-    }
-
-    function simulateMockClick() {
-      currentPotWei += 80000000000000n; // 0.00008 ETH to pot
-      totalClicks++;
-      currentKing = userAddress || '0x' + Math.random().toString(16).slice(2, 10) + '...' + Math.random().toString(16).slice(2, 6);
-      if (secondsLeft < 60) {
-        secondsLeft = 60;
-      } else {
-        secondsLeft = Math.min(secondsLeft + 30, 1800);
-      }
-      addFeedItem(currentKing, 'Pressed button (+30s)');
-      updateUi();
-    }
-
-    // --- Share to Warpcast / Farcaster Intent ---
-    function shareToWarpcast() {
-      const ethAmount = (Number(currentPotWei) / 1e18).toFixed(4);
-      const castText = `I just pressed The Warp Button on @base! Current jackpot is ${ethAmount} ETH ($${((Number(currentPotWei)/1e18)*ETH_USD_PRICE).toFixed(2)}). Can you claim the pot before time expires?`;
-      const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(castText)}&embeds[]=${encodeURIComponent(window.location.href)}`;
-      window.open(url, '_blank');
-    }
-
-    // --- Event Listeners ---
-    document.getElementById('mainButton').addEventListener('click', handlePress);
-    document.getElementById('btnShareCast').addEventListener('click', shareToWarpcast);
-
-    document.getElementById('btnConnectWallet').addEventListener('click', async () => {
-      const provider = getEthereumProvider();
-      if (!provider) {
-        alert('Please open inside Warpcast or install a Web3 wallet (MetaMask/Rabby).');
-        return;
-      }
-      try {
-        const accounts = await provider.request({ method: 'eth_requestAccounts' });
-        userAddress = accounts[0];
-        document.getElementById('walletBtnText').textContent = formatAddress(userAddress);
-      } catch(e) {}
-    });
-
-    document.getElementById('btnAudioToggle').addEventListener('click', () => {
-      sfxEnabled = !sfxEnabled;
-      document.getElementById('btnAudioToggle').textContent = sfxEnabled ? '🔊 SFX ON' : '🔈 SFX OFF';
-    });
-
-    document.getElementById('btnRules').addEventListener('click', () => {
-      document.getElementById('rulesModal').style.display = 'flex';
-    });
-
-    document.getElementById('btnCloseRules').addEventListener('click', () => {
-      document.getElementById('rulesModal').style.display = 'none';
-    });
-
-    // --- Initialization ---
-    window.addEventListener('DOMContentLoaded', () => {
-      initFarcaster();
-      updateUi();
-      startLocalTimer();
-      syncGameState();
-      setInterval(syncGameState, 2500);
-    });
-  </script>
-</body>
-</html>
+<main class="container">
+  <div class="top-bar"><h1 class="brand"><span class="brand-dot" aria-hidden="true"></span>WARP BUTTON</h1><div class="top-actions"><button class="pill" id="btnRules">RULES</button><span class="pill" id="badgeNetwork">V2 PREVIEW</span></div></div>
+  <section class="status-card" id="releaseStatus"><strong>Preview · play is not open yet</strong><p>The new game is being verified. No funds can be sent from this preview.</p></section>
+  <section class="pot-card" aria-label="Prize pot"><div class="pot-label">Prize Pot · Round <span id="roundNumber">—</span></div><div class="pot-amount"><span id="potValue">—</span><span class="pot-symbol">ETH</span></div><div class="pot-fiat" id="potNote">Live values appear when the game opens</div></section>
+  <div class="timer-container"><div class="timer-box" id="timerBox"><div class="timer-digits" id="timerDigits">--:--</div></div><div class="timer-status" id="timerStatus">AWAITING RELEASE</div></div>
+  <div class="button-stage"><div class="arcade-base"><div class="button-ring"><button class="warp-btn" id="mainButton" disabled><span class="btn-text" id="buttonText">PREVIEW</span><span class="btn-sub" id="ticketValue">Play opens soon</span></button></div></div></div>
+  <section class="king-card" aria-label="Current leader"><div class="king-info"><span class="crown-icon" aria-hidden="true">♛</span><div><div class="king-title">Current Leader / Last Press</div><div class="king-address" id="kingAddress">—</div></div></div><div class="clicks-badge"><span id="clickCounter">—</span> presses</div></section>
+  <div class="actions-grid"><button class="btn-secondary btn-share" id="btnShareCast">Share Warp</button><button class="btn-secondary" id="btnConnectWallet"><span id="walletBtnText">Connect Wallet</span></button></div>
+  <section class="status-card" id="transactionPanel" hidden aria-live="polite" aria-atomic="true"><strong id="transactionTitle"></strong><p id="transactionMessage"></p><a id="transactionLink" target="_blank" rel="noopener noreferrer" hidden>View on BaseScan</a><form class="recovery" id="recoveryForm" hidden><label for="recoveryHash">Recover a submitted or replacement transaction</label><input id="recoveryHash" autocomplete="off" spellcheck="false" placeholder="0x transaction hash" pattern="0x[0-9a-fA-F]{64}" required><button class="btn-secondary" type="submit">Verify transaction</button><button class="btn-secondary" id="noSubmission" type="button" hidden>I checked my wallet: nothing was sent</button></form></section>
+  <section class="claim-card" id="claimPanel" hidden><strong>Your available credits</strong><span id="winningsValue">Checking…</span><button class="btn-secondary" id="btnClaim" disabled>Claim winnings</button><button class="btn-secondary" id="btnRefund" hidden disabled>Claim refund</button></section>
+  <button class="btn-secondary" id="btnSettle" hidden disabled>Settle expired round</button>
+  <section class="feed-card"><div class="feed-title"><span>Your confirmed activity</span><span id="feedLiveStatus">Preview</span></div><div id="feedList"><div class="feed-item"><span>No verified actions yet</span></div></div></section>
+  <p class="footer">85% prize pot · 10% next round · 5% creator<br>Winner claims the full displayed prize pot after settlement.<br><button class="pill" id="btnRefresh">Refresh status</button></p>
+</main>
+<div class="modal-overlay" id="rulesModal" role="dialog" aria-modal="true" aria-labelledby="rulesTitle" tabindex="-1"><div class="modal-content"><h2 class="modal-title" id="rulesTitle">How Warp V2 works</h2><div class="modal-body">
+<p><strong>Be last.</strong> Press before the clock ends. The last player wins the full displayed prize pot.</p>
+<p><strong>Ticket and timer.</strong> The exact ticket is read from the game on Base; wallet gas is extra. A round starts with 10 minutes. Each press adds 30 seconds, capped at 30 minutes remaining. Under 60 seconds, a press resets the timer to 60 seconds.</p>
+<p><strong>Every ticket:</strong> 85% joins the prize pot, 10% seeds the next round, 5% becomes the creator's claimable fee. External ETH deposits split 50% to the pot and 50% to the creator's claimable balance.</p>
+<p><strong>Settlement and claims.</strong> Anyone can settle an expired round; the next press also settles it. The winner receives a claimable balance and chooses when to withdraw. A transaction is required: the timer cannot send one by itself.</p>
+<p><strong>Token rewards.</strong> No token trading income is included or promised in this preview. Reward collection only applies after its separate release verification.</p>
+<p><strong>Before you play.</strong> Tickets are paid entries and are not returned when another player wins. A countdown is an estimate from the latest verified block; the contract decides which press arrives in time.</p>
+</div><button class="modal-close" id="btnCloseRules">Got it</button></div></div>
+<noscript><p>This game needs JavaScript. Transactions are disabled.</p></noscript>
+</body></html>

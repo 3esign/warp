@@ -1,8 +1,8 @@
 {
   "accountAssociation": {
-    "header": "eyJmaWQiOjAsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgwOTA1NjY3OTFGNmZCNjU2MjJGNGYxMWI1YjdmRTM5YjIxOUU4OUY0In0",
+    "header": "eyJmaWQiOjg4MDcwMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDlFZTFkNTEyNTVmY0NCZDJkNzVEOTk1MDA3MWMxMmQ4NDQ1MzRhMEQifQ",
     "payload": "eyJkb21haW4iOiIzZXNpZ24uZ2l0aHViLmlvIn0",
-    "signature": "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "signature": "xUJRlyqgvAzqcFOr1mHNsbPznI6gQncpXk7q2RUeLGtG8XtIO65OLVEXIHILolzyEroksyccXRfnk8i9N1gUkBw="
   },
   "frame": {
     "version": "1",
@@ -11,8 +11,17 @@
     "homeUrl": "https://3esign.github.io/warp/",
     "imageUrl": "https://3esign.github.io/warp/og-image.png",
     "buttonTitle": "🔴 PRESS THE BUTTON",
-    "splashImageUrl": "https://3esign.github.io/warp/icon.png",
-    "splashBackgroundColor": "#07090e",
-    "webhookUrl": ""
+    "splashImageUrl": "https://3esign.github.io/s.png",
+    "splashBackgroundColor": "#07090e"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "The Warp Button",
+    "iconUrl": "https://3esign.github.io/warp/icon.png",
+    "homeUrl": "https://3esign.github.io/warp/",
+    "imageUrl": "https://3esign.github.io/warp/og-image.png",
+    "buttonTitle": "🔴 PRESS THE BUTTON",
+    "splashImageUrl": "https://3esign.github.io/s.png",
+    "splashBackgroundColor": "#07090e"
   }
 }
