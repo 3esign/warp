@@ -4,12 +4,25 @@
   const $ = id => document.getElementById(id);
   let snapshot = null, account = null, provider = null, sdk = null, inMiniApp = false;
   let busy = false, syncing = false, checking = false, lastError = null, credits = {winnings: 0n, refund: 0n}, lastTxHash = null;
-  let store;
-  try { store = new C.PendingStore(window.localStorage, 'warp:v2:pending:' + config.chainId + ':' + (config.contract || 'preview')); }
-  catch { showMessage('Storage unavailable', 'This browser cannot safely recover pending transactions. Play is disabled.', 'error'); }
+  let store, claimStore, recoveryStore = null;
+  try {
+    const key = 'warp:v2:pending:' + config.chainId + ':' + (config.contract || 'preview');
+    store = new C.PendingStore(window.localStorage, key);
+    // A payout may be sent after a canonical press has already created a credit.
+    // Keep its recovery record separate so one pending press cannot disable claim.
+    claimStore = new C.PendingStore(window.localStorage, key + ':payout');
+  } catch { store = null; claimStore = null; showMessage('Storage unavailable', 'This browser cannot safely recover pending transactions. Play is disabled.', 'error'); }
   const short = value => !value || C.same(value, C.ZERO) ? 'No player yet' : value.slice(0, 6) + '…' + value.slice(-4);
   const humanError = error => Number(error?.code) === 4001 ? 'You declined the wallet request. No new action was confirmed.' : String(error?.message || error).slice(0, 500);
   const pending = () => store ? store.read() : null;
+  const claimPending = () => claimStore ? claimStore.read() : null;
+  const storeForAction = action => action === 'claim' || action === 'refund' ? claimStore : store;
+  function pendingEntry() {
+    const payout = claimPending();
+    if (payout) return {record: payout, store: claimStore};
+    const base = pending();
+    return base ? {record: base, store} : null;
+  }
   async function withStoreLock(task) {
     C.ensure(navigator.locks?.request, 'This browser cannot coordinate wallet recovery. Use a browser with Web Locks support.');
     return navigator.locks.request('warp:v2:submit:' + config.contract, {ifAvailable: true}, async lock => {
@@ -105,16 +118,17 @@
     } finally { syncing = false; render(); }
   }
   function render() {
-    let record = null;
-    try { record = pending(); } catch (error) { lastError = error; showMessage('Recovery required', humanError(error), 'error'); }
+    let baseRecord = null, payoutRecord = null;
+    try { baseRecord = pending(); payoutRecord = claimPending(); } catch (error) { lastError = error; showMessage('Recovery required', humanError(error), 'error'); }
     const fresh = snapshot && Date.now() - snapshot.loadedAt <= config.maxAgeMs && !lastError;
-    const ready = config.enabled && fresh && store && !record && !busy;
-    $('mainButton').disabled = !ready;
-    $('btnSettle').disabled = !ready || !snapshot?.expired;
-    $('btnClaim').disabled = !ready || !account || credits.winnings <= 0n;
-    $('btnRefund').disabled = !ready || !account || credits.refund <= 0n;
+    const baseReady = config.enabled && fresh && store && !baseRecord && !busy;
+    const payoutReady = config.enabled && fresh && claimStore && !payoutRecord && !busy;
+    $('mainButton').disabled = !baseReady;
+    $('btnSettle').disabled = !baseReady || !snapshot?.expired;
+    $('btnClaim').disabled = !payoutReady || !account || credits.winnings <= 0n;
+    $('btnRefund').disabled = !payoutReady || !account || credits.refund <= 0n;
     $('btnConnectWallet').disabled = busy;
-    $('buttonText').textContent = !config.enabled ? 'PREVIEW' : busy ? 'WAIT…' : record ? 'PENDING' : !fresh ? 'PAUSED' : 'PRESS';
+    $('buttonText').textContent = !config.enabled ? 'PREVIEW' : busy ? 'WAIT…' : baseRecord ? 'PENDING' : !fresh ? 'PAUSED' : 'PRESS';
     $('badgeNetwork').textContent = config.enabled ? 'BASE' : 'V2 PREVIEW';
     $('badgeNetwork').classList.toggle('active', Boolean(config.enabled && fresh));
     $('walletBtnText').textContent = account ? short(account) : 'Connect Wallet';
@@ -168,23 +182,24 @@
     busy = true; render();
     try {
       C.assertEnabled(config);
-      C.ensure(store, 'Persistent storage is required for safe transaction recovery.');
+      const actionStore = storeForAction(action);
+      C.ensure(actionStore, 'Persistent storage is required for safe transaction recovery.');
       C.ensure(navigator.locks?.request, 'This browser cannot coordinate pending wallet requests. Open Warp in a browser with Web Locks support.');
       await navigator.locks.request('warp:v2:submit:' + config.contract, {ifAvailable: true}, async lock => {
         C.ensure(lock, 'Another Warp tab is preparing a transaction.');
-        C.ensure(!pending(), 'A previous transaction is still being verified.');
+        C.ensure(!actionStore.read(), 'A previous transaction for this action is still being verified.');
         await connect();
         await sync();
         C.ensure(!lastError, humanError(lastError));
         showMessage('Review in your wallet', 'Your wallet will show the action, ticket (if any) and gas. Confirmation is checked on Base after submission.');
         const rpc = (method, params) => withRpc(r => r(method, params));
-        const record = await C.submit({provider, rpc, config, snapshot, account, action, store});
+        const record = await C.submit({provider, rpc, config, snapshot, account, action, store: actionStore});
         if (record?.hash) lastTxHash = record.hash;
         showPending(record);
       });
     } catch (error) {
       showMessage('Action not confirmed', humanError(error), 'error');
-      try { const record = pending(); if (record?.version === 2) { $('recoveryForm').hidden = false; $('noSubmission').hidden = Boolean(record.hash); } } catch {}
+      try { const record = pendingEntry()?.record; if (record?.version === 2) { $('recoveryForm').hidden = false; $('noSubmission').hidden = Boolean(record.hash); } } catch {}
     } finally { busy = false; render(); verify(); }
   }
   function addConfirmed(record) {
@@ -197,29 +212,38 @@
     who.textContent = short(record.account); item.append(note, who); list.prepend(item);
     while (list.children.length > 8) list.lastChild.remove();
   }
-  async function verify() {
-    if (!config.enabled || !store || checking || busy) return;
-    let record;
-    try { record = pending(); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); return; }
+  async function verifyRecord(actionStore, record) {
     if (!record?.hash) return;
     lastTxHash = record.hash;
+    const result = await withRpc(rpc => C.verifyPending(rpc, record, config));
+    if (result.state === 'confirmed' || result.state === 'reverted') {
+      await withStoreLock(() => actionStore.finish(record, result));
+      $('recoveryForm').hidden = true;
+      if (result.state === 'confirmed') {
+        addConfirmed(record);
+        showMessage('Confirmed on Base', ({press: 'Your press was included and verified.', settle: 'The round was settled. The winner can claim its credit.', claim: 'Your winnings were claimed.', refund: 'Your refund was claimed.'})[record.action] + ' The transaction has reached safe confirmation.', 'success', record.hash);
+      } else showMessage('Transaction reverted', 'Base confirmed the transaction failed. The game action did not complete; network gas may still have been charged.', 'error', record.hash);
+      await sync();
+    } else if (result.state === 'confirming') {
+      showMessage('Included · confirming on Base', 'The receipt is canonical. Waiting for safe confirmation before marking the action successful.', '', record.hash);
+      await sync();
+    } else {
+      showMessage('Waiting for a receipt', 'This transaction may be pending, replaced or dropped. It will not be sent again automatically. Check your wallet; paste a replacement hash below if needed.', '', record.hash);
+    }
+  }
+  async function verify() {
+    if (!config.enabled || (!store && !claimStore) || checking || busy) return;
     checking = true;
     try {
-      const result = await withRpc(rpc => C.verifyPending(rpc, record, config));
-      if (result.state === 'confirmed' || result.state === 'reverted') {
-        await withStoreLock(() => store.finish(record, result));
-        $('recoveryForm').hidden = true;
-        if (result.state === 'confirmed') {
-          addConfirmed(record);
-          showMessage('Confirmed on Base', ({press: 'Your press was included and verified.', settle: 'The round was settled. The winner can claim their credit.', claim: 'Your winnings were claimed.', refund: 'Your refund was claimed.'})[record.action] + ' The transaction has reached safe confirmation.', 'success', record.hash);
-        } else showMessage('Transaction reverted', 'Base confirmed the transaction failed. The game action did not complete; network gas may still have been charged.', 'error', record.hash);
-        await sync();
-      } else if (result.state === 'confirming') {
-        showMessage('Included · confirming on Base', 'The receipt is canonical. Waiting for safe confirmation before marking the action successful.', '', record.hash);
-        await sync();
+      const entries = [];
+      if (store) entries.push({store, record: store.read()});
+      if (claimStore) entries.push({store: claimStore, record: claimStore.read()});
+      for (const entry of entries) {
+        if (!entry.record?.hash) continue;
+        try { await verifyRecord(entry.store, entry.record); }
+        catch (error) { showMessage('Confirmation not available', humanError(error) + ' Your pending record is retained.', 'error', entry.record.hash); }
       }
-      else showMessage('Waiting for a receipt', 'This transaction may be pending, replaced or dropped. It will not be sent again automatically. Check your wallet; paste a replacement hash below if needed.', '', record.hash);
-    } catch (error) { showMessage('Confirmation not available', humanError(error) + ' Your pending record is retained.', 'error', record.hash); }
+    } catch (error) { showMessage('Recovery required', humanError(error), 'error'); }
     finally { checking = false; render(); }
   }
   $('mainButton').addEventListener('click', () => act('press'));
@@ -232,15 +256,15 @@
     event.preventDefault();
     if (busy || checking) return;
     try {
-      const record = pending(), hash = $('recoveryHash').value.trim();
-      C.ensure(record && C.HASH.test(hash), 'Enter a valid transaction hash from your wallet.');
+      const entry = pendingEntry(), record = entry?.record, actionStore = entry?.store, hash = $('recoveryHash').value.trim();
+      C.ensure(record && actionStore && C.HASH.test(hash), 'Enter a valid transaction hash from your wallet.');
       const candidate = {...record, hash, state: 'pending'};
       // Validate any available receipt before replacing the saved recovery hash.
       await withRpc(rpc => C.verifyPending(rpc, candidate, config));
       await withStoreLock(() => {
-        const current = pending();
+        const current = actionStore.read();
         C.ensure(current && current.createdAt === record.createdAt && current.hash === record.hash, 'Another tab updated the transaction. Refresh before recovery.');
-        store.write(candidate);
+        actionStore.write(candidate);
       });
       lastTxHash = candidate.hash;
       showPending(candidate); await verify();
@@ -250,10 +274,10 @@
     if (busy || checking) return;
     try {
       await withStoreLock(() => {
-        const record = pending();
-        C.ensure(record?.version === 2 && record.nonce && record.observedBlock && record.observedBlockHash && !record.hash, 'A submitted or legacy transaction must be reviewed first.');
-        store.storage.setItem(store.key + ':dismissed', JSON.stringify({...record, dismissedAt: Date.now(), reason: 'User checked wallet and states nothing was sent'}));
-        store.storage.removeItem(store.key);
+        const entry = pendingEntry(), record = entry?.record, actionStore = entry?.store;
+        C.ensure(actionStore && record?.version === 2 && record.nonce && record.observedBlock && record.observedBlockHash && !record.hash, 'A submitted or legacy transaction must be reviewed first.');
+        actionStore.storage.setItem(actionStore.key + ':dismissed', JSON.stringify({...record, dismissedAt: Date.now(), reason: 'User checked wallet and states nothing was sent'}));
+        actionStore.storage.removeItem(actionStore.key);
       });
       $('recoveryForm').hidden = true;
       showMessage('Unsubmitted request cleared', 'The saved request was cleared after your wallet-history check.'); render();
@@ -262,7 +286,7 @@
   function getShareContent(customTx = null) {
     const roundNum = snapshot?.round ? snapshot.round.toString() : '2';
     const potEth = snapshot?.pot ? C.formatEth(snapshot.pot) : '0.0001';
-    const activeTx = customTx || pending()?.hash || lastTxHash;
+    const activeTx = customTx || lastTxHash || pending()?.hash || claimPending()?.hash;
     let text;
     if (activeTx && C.HASH.test(activeTx)) {
       text = '🔴 I pressed The Warp Button in Round #' + roundNum + ' on Base! Pot: ' + potEth + ' ETH. Be the last press before the timer ends to win! ⏱️\n\nTx: ' + config.explorer + activeTx + '\n\n#warp #base $WARP @clanker';
@@ -270,11 +294,10 @@
       text = '🔴 The Warp Button on Base! Round #' + roundNum + ' prize pot: ' + potEth + ' ETH. Be the last press before the round countdown ends! ⏱️\n\n#warp #base $WARP @clanker';
     }
     const shareUrl = config.publicUrl;
-    const warpcastUrl = 'https://warpcast.com/~/compose?text=' + encodeURIComponent(text) + '&embeds[]=' + encodeURIComponent(shareUrl) + '&channelKey=base';
-    return { text, shareUrl, warpcastUrl, activeTx };
+    return { text, shareUrl, activeTx };
   }
   async function shareCast(customTx = null) {
-    const { text, shareUrl, warpcastUrl } = getShareContent(customTx);
+    const { text, shareUrl } = getShareContent(customTx);
     try {
       if (inMiniApp && sdk?.actions?.composeCast) {
         try {
@@ -284,16 +307,16 @@
           if (composeErr?.name === 'AbortError' || composeErr?.message?.includes('rejected')) return;
         }
       }
-      if (inMiniApp && sdk?.actions?.openUrl) {
-        try {
-          await sdk.actions.openUrl(warpcastUrl);
-          return;
-        } catch {}
+      if (typeof navigator.share === 'function') {
+        await navigator.share({title: 'The Warp Button', text, url: shareUrl});
+        return;
       }
-      const opened = window.open(warpcastUrl, '_blank', 'noopener,noreferrer');
-      if (!opened && typeof window.location !== 'undefined') {
-        window.location.href = warpcastUrl;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text + '\n\n' + shareUrl);
+        showMessage('Ready to share', 'The cast text and Warp link were copied. Open Farcaster and paste them.', 'success');
+        return;
       }
+      showMessage('Share unavailable', 'Use your device share menu to send the Warp link to Farcaster.', 'error');
     } catch (error) {
       if (error?.name !== 'AbortError') showMessage('Share unavailable', humanError(error), 'error');
     }
@@ -309,11 +332,11 @@
   $('btnCloseRules').addEventListener('click', closeRules);
   $('rulesModal').addEventListener('click', event => { if (event.target === $('rulesModal')) closeRules(); });
   $('rulesModal').addEventListener('keydown', event => { if (event.key === 'Escape') closeRules(); if (event.key === 'Tab') { event.preventDefault(); $('btnCloseRules').focus(); } });
-  window.addEventListener('storage', event => { if (store && event.key === store.key) { try { showPending(pending()); render(); verify(); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); } } });
+  window.addEventListener('storage', event => { if (store && (event.key === store.key || claimStore && event.key === claimStore.key)) { try { showPending(pendingEntry()?.record); render(); verify(); } catch (error) { showMessage('Recovery required', humanError(error), 'error'); } } });
   async function init() {
     render();
     try {
-      const initial = pending();
+      const initial = pendingEntry()?.record;
       if (initial?.hash) lastTxHash = initial.hash;
       showPending(initial);
     } catch (error) { showMessage('Recovery required', humanError(error), 'error'); }
